@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Writer Helper · Research + Writing Studio (MVP)</title>
+  <meta name="description" content="Single‑file research + writing tool. Search open sources, capture citations/snippets, write with inline citations, export BibTeX/JSON." />
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=EB+Garamond:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0f0f12; --bg-soft:#16161a; --card:#1b1b21; --text:#fafaf7; --muted:#b8b8bf; --accent:#e3b341; --border:#2a2a32;
+      --ink: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      --serif: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    }
+    .light{ --bg:#ffffff; --bg-soft:#fafafa; --card:#ffffff; --text:#0f0f12; --muted:#585865; --accent:#111111; --border:#e7e7ee; }
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:var(--ink);-webkit-font-smoothing:antialiased}
+    .app{display:grid;grid-template-rows:auto 1fr auto;min-height:100vh}
+    header{position:sticky;top:0;z-index:50;background:linear-gradient(180deg,var(--bg),rgba(0,0,0,0));border-bottom:1px solid var(--border)}
+    .wrap{max-width:1200px;margin:0 auto;padding:16px}
+    .toolbar{display:grid;grid-template-columns:1fr auto auto auto;gap:10px;align-items:center}
+    .brand{display:flex;gap:10px;align-items:center}
+    .brand b{font-variant-caps:all-small-caps;letter-spacing:0.08em}
+    .chip{font-size:12px;border:1px solid var(--border);padding:6px 8px;border-radius:999px;background:var(--bg-soft)}
+    input,select,textarea{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font:inherit}
+    input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px}
+    button{background:transparent;color:var(--text);border:1px solid var(--border);border-radius:12px;padding:10px 12px;font:600 14px var(--ink);cursor:pointer;transition:transform .05s ease, box-shadow .15s ease}
+    button:hover{box-shadow:0 6px 14px rgba(0,0,0,.25), inset 0 0 0 999px rgba(227,179,65,.08)}
+    button:active{transform:translateY(1px)}
+    .primary{background:var(--accent);color:#111;border-color:transparent}
+    .muted{color:var(--muted)}
+    .layout{display:grid;grid-template-columns:360px 1fr 420px;gap:16px;margin:16px}
+    .panel{background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(0,0,0,.02));border:1px solid var(--border);border-radius:16px}
+    .panel h3{margin:0;padding:12px 14px;border-bottom:1px solid var(--border);font:600 13px var(--ink);letter-spacing:.04em;color:var(--muted)}
+    .panel .body{padding:12px}
+    .results{display:flex;flex-direction:column;gap:10px}
+    .card{border:1px solid var(--border);border-radius:14px;padding:12px;background:var(--card)}
+    .card h4{margin:0 0 6px;font-family:var(--serif);font-size:18px}
+    .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+    .meta{font-size:12px;color:var(--muted)}
+    .pill{font-size:11px;border:1px solid var(--border);border-radius:999px;padding:2px 8px}
+    .split{display:grid;grid-template-columns:1fr auto;gap:8px}
+    .editor{height:calc(100% - 44px)}
+    .editor textarea{width:100%;height:100%;resize:none;border-top-left-radius:0;border-top-right-radius:0}
+    .editor-toolbar{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--border);align-items:center}
+    .kbd{font:600 11px var(--ink);border:1px solid var(--border);border-bottom-width:2px;border-radius:6px;padding:2px 6px}
+    .list{display:flex;flex-direction:column;gap:8px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px dashed var(--border);border-radius:12px;padding:8px}
+    .small{font-size:12px}
+    .right{display:flex;gap:8px;align-items:center}
+    .tabs{display:flex;gap:8px;padding:8px;border-bottom:1px solid var(--border)}
+    .tabs button[aria-selected="true"]{background:var(--bg);border-color:var(--accent)}
+    .status{position:fixed;left:50%;top:12px;transform:translateX(-50%);background:var(--card);border:1px solid var(--border);border-radius:10px;padding:8px 12px;display:none}
+    .show{display:block}
+    .foot{display:flex;justify-content:space-between;align-items:center;font-size:12px;color:var(--muted);border-top:1px solid var(--border)}
+    .foot .wrap{padding:10px 16px}
+    .link{color:inherit}
+    .hidden{display:none}
+    .focus-mode .left, .focus-mode .midhead{display:none}
+    .focus-mode .editor{height:calc(100vh - 140px)}
+    .mono{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}
+    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .badge{border:1px solid var(--border);padding:2px 6px;border-radius:6px;font-size:11px}
+  </style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <div class="wrap toolbar">
+      <div class="brand">
+        <span class="chip">Writer Helper</span>
+        <b class="muted">Research + Writing Studio</b>
+      </div>
+      <div class="split">
+        <input id="q" placeholder="Search topic, e.g. ‘misanthropy in modern ethics’" />
+        <select id="source">
+          <option value="openalex" selected>OpenAlex (papers)</option>
+          <option value="arxiv">arXiv</option>
+          <option value="wikipedia">Wikipedia</option>
+          <option value="gbooks">Google Books</option>
+          <option value="s2">Semantic Scholar</option>
+        </select>
+      </div>
+      <div class="right">
+        <button id="searchBtn" class="primary">Search ⏎</button>
+        <button id="focusBtn" title="F">Focus</button>
+        <button id="themeBtn" title="Toggle theme">Theme</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout" id="main">
+    <!-- Left: Sources & Saved Library -->
+    <section class="panel left">
+      <h3>Library & Citations</h3>
+      <div class="body">
+        <div class="tabs" role="tablist">
+          <button class="tab" data-tab="refs" aria-selected="true">References</button>
+          <button class="tab" data-tab="snips">Snippets</button>
+          <button class="tab" data-tab="pdfs">PDFs</button>
+        </div>
+        <div id="tab-refs" class="tabpane">
+          <div class="list" id="refsList"></div>
+          <div class="grid2" style="margin-top:10px">
+            <button id="exportBib">Export BibTeX</button>
+            <button id="exportJSON">Export Project JSON</button>
+          </div>
+          <details style="margin-top:10px"><summary class="small">Add custom reference</summary>
+            <div class="grid2" style="margin-top:8px">
+              <input id="customTitle" placeholder="Title"/>
+              <input id="customAuthor" placeholder="Authors (comma)"/>
+              <input id="customYear" placeholder="Year"/>
+              <input id="customURL" placeholder="URL"/>
+            </div>
+            <button id="addCustomRef" style="margin-top:8px">Add</button>
+          </details>
+        </div>
+        <div id="tab-snips" class="tabpane hidden">
+          <div class="list" id="snipList"></div>
+        </div>
+        <div id="tab-pdfs" class="tabpane hidden">
+          <div class="list" id="pdfList"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Middle: Search results -->
+    <section class="panel">
+      <h3 class="midhead">Search Results</h3>
+      <div class="body">
+        <div class="results" id="results"></div>
+      </div>
+    </section>
+
+    <!-- Right: Editor -->
+    <section class="panel">
+      <div class="editor">
+        <div class="editor-toolbar">
+          <button id="insertCite">Insert citation (⌘/Ctrl+K)</button>
+          <button id="biblioBtn">Copy Bibliography</button>
+          <span class="muted small">Markdown supported • <span id="wc">0</span> words</span>
+        </div>
+        <textarea id="doc" placeholder="Write here… Use [[key]] to insert citations you’ve added to Library. Example: [[doe2020mind]]."></textarea>
+      </div>
+    </section>
+  </main>
+
+  <div class="status" id="status">Parsing…</div>
+
+  <footer class="foot">
+    <div class="wrap" style="display:flex;gap:8px;align-items:center">
+      <span>Writer Helper · © 2025</span>
+      <span class="badge">HTML‑first</span>
+      <span class="badge">Local‑first</span>
+      <span class="badge">No accounts</span>
+    </div>
+    <div class="wrap">All sources are public/open APIs. Respect licenses. PDFs are opened directly from providers.</div>
+  </footer>
+</div>
+
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/citation-js@0.6.9/build/citation.min.js"></script>
+<script>
+(function(){
+  const el = s=>document.querySelector(s);
+  const els = s=>Array.from(document.querySelectorAll(s));
+  const state = JSON.parse(localStorage.getItem('writer-helper')) || {
+    theme:'dark', focus:false,
+    refs:{}, // key -> CSL-JSON
+    pdfs:[],  // {title,url}
+    snips:[], // {key, text}
+    doc:''
+  };
+  const save = ()=> localStorage.setItem('writer-helper', JSON.stringify(state));
+
+  // THEME
+  const applyTheme=()=>{ document.body.classList.toggle('light', state.theme==='light'); };
+  applyTheme();
+  el('#themeBtn').onclick=()=>{ state.theme = state.theme==='light'?'dark':'light'; applyTheme(); save(); };
+
+  // FOCUS
+  const applyFocus=()=>{ document.getElementById('app').classList.toggle('focus-mode', !!state.focus); };
+  applyFocus();
+  el('#focusBtn').onclick=()=>{ state.focus=!state.focus; applyFocus(); save(); };
+
+  // EDITOR
+  const docEl = el('#doc');
+  docEl.value = state.doc || '';
+  const countWords = t=> (t.trim().match(/\b\w+\b/g)||[]).length;
+  el('#wc').textContent=countWords(docEl.value);
+  docEl.addEventListener('input', ()=>{ state.doc = docEl.value; el('#wc').textContent=countWords(state.doc); save(); });
+
+  // Tabs in Library panel
+  els('.tab').forEach(btn=>{
+    btn.onclick=()=>{
+      els('.tab').forEach(b=>b.setAttribute('aria-selected','false'));
+      btn.setAttribute('aria-selected','true');
+      els('.tabpane').forEach(p=>p.classList.add('hidden'));
+      el('#tab-'+btn.dataset.tab).classList.remove('hidden');
+    }
+  });
+
+  // RENDERERS
+  function renderRefs(){
+    const box = el('#refsList'); box.innerHTML='';
+    const keys = Object.keys(state.refs).sort();
+    if(!keys.length){ box.innerHTML = '<p class="small muted">No references yet. Add from results or create a custom one.</p>'; return; }
+    keys.forEach(key=>{
+      const r = state.refs[key];
+      const title = r.title || '(untitled)';
+      const year = r.issued?.['date-parts']?.[0]?.[0] || r.issued?.raw || r.issued || '';
+      const authors = (r.author||[]).map(a=>[a.given,a.family].filter(Boolean).join(' ')).join(', ');
+      const row = document.createElement('div'); row.className='row';
+      row.innerHTML = `<div>
+        <div class="small mono">[${key}]</div>
+        <div><b>${title}</b></div>
+        <div class="meta">${authors || ''} ${year? '· '+year:''}</div>
+      </div>
+      <div class="right">
+        <button data-act="cite" data-key="${key}">Copy cite</button>
+        <button data-act="insert" data-key="${key}">Insert [[${key}]]</button>
+        ${r.URL?`<a class="link" href="${r.URL}" target="_blank"><button>Open</button></a>`:''}
+        <button data-act="del" data-key="${key}">✕</button>
+      </div>`;
+      box.appendChild(row);
+    });
+    box.onclick = async (e)=>{
+      const b = e.target.closest('button'); if(!b) return;
+      const key = b.dataset.key; const act = b.dataset.act;
+      if(act==='del'){ delete state.refs[key]; save(); renderRefs(); return; }
+      if(act==='insert'){ insertAtCursor(docEl, `[[${key}]]`); docEl.dispatchEvent(new Event('input')); return; }
+      if(act==='cite'){ const text = await citeKeyToText(key); copy(text); toast('Citation copied'); }
+    }
+  }
+
+  function renderPDFs(){
+    const box=el('#pdfList'); box.innerHTML='';
+    if(!state.pdfs.length){ box.innerHTML='<p class="small muted">No PDFs yet. Add from results.</p>'; return; }
+    state.pdfs.forEach((p,i)=>{
+      const row=document.createElement('div'); row.className='row';
+      row.innerHTML=`<div><b>${p.title||'PDF'}</b><div class="meta">${p.url}</div></div>
+      <div class="right"><a class="link" target="_blank" href="${p.url}"><button>Open</button></a>
+      <button data-i="${i}" data-act="rm">✕</button></div>`;
+      box.appendChild(row);
+    });
+    box.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; if(b.dataset.act==='rm'){ state.pdfs.splice(b.dataset.i,1); save(); renderPDFs(); } };
+  }
+
+  function renderSnips(){
+    const box=el('#snipList'); box.innerHTML='';
+    if(!state.snips.length){ box.innerHTML='<p class="small muted">No snippets yet. Use “Save snippet”.</p>'; return; }
+    state.snips.forEach((s,i)=>{
+      const row=document.createElement('div'); row.className='row';
+      row.innerHTML=`<div><div class="small mono">[${s.key}]</div><div>${escapeHtml(s.text)}</div></div>
+      <div class="right"><button data-i="${i}" data-act="ins">Insert</button><button data-i="${i}" data-act="rm">✕</button></div>`;
+      box.appendChild(row);
+    });
+    box.onclick=e=>{ const b=e.target.closest('button'); if(!b) return; const i=+b.dataset.i; if(b.dataset.act==='rm'){ state.snips.splice(i,1); save(); renderSnips(); } if(b.dataset.act==='ins'){ insertAtCursor(docEl, state.snips[i].text); docEl.dispatchEvent(new Event('input')); }}
+  }
+
+  renderRefs(); renderPDFs(); renderSnips();
+
+  // EXPORTS
+  el('#exportBib').onclick=async ()=>{
+    const cite = new window.Cite(Object.values(state.refs));
+    const bib = cite.format('bibliography', {format: 'text', template: 'apa'});
+    download('bibliography.txt', bib);
+  };
+  el('#exportJSON').onclick=()=>{ download('writer-helper-project.json', JSON.stringify(state,null,2)); };
+  el('#addCustomRef').onclick=()=>{
+    const t=el('#customTitle').value.trim(); if(!t) return toast('Title required');
+    const a=el('#customAuthor').value.trim(); const y=el('#customYear').value.trim(); const u=el('#customURL').value.trim();
+    const key = slug(`${(a||'anon').split(',')[0]||'anon'} ${y||''} ${t}`).slice(0,24);
+    state.refs[key]={ type:'article-journal', title:t, author: a? a.split(',').map(n=>nameToAuthor(n.trim())):[], issued: y? { 'date-parts': [[+y]] }: undefined, URL:u||undefined, id:key };
+    save(); renderRefs(); toast(`Added [${key}]`);
+    el('#customTitle').value=el('#customAuthor').value=el('#customYear').value=el('#customURL').value='';
+  };
+
+  // INSERT CITATION DIALOG (quick)
+  el('#insertCite').onclick=()=>{
+    const key = prompt('Insert citation: type key to insert like [[key]]. Available: '+Object.keys(state.refs).slice(0,20).join(', '));
+    if(key && state.refs[key]){ insertAtCursor(docEl, `[[${key}]]`); docEl.dispatchEvent(new Event('input')); }
+  };
+
+  el('#biblioBtn').onclick=async ()=>{
+    const cite = new window.Cite(Object.values(state.refs));
+    const bib = cite.format('bibliography', {format: 'text', template: 'apa'});
+    copy(bib); toast('Bibliography copied');
+  };
+
+  // SEARCH
+  el('#q').addEventListener('keydown',e=>{ if(e.key==='Enter') el('#searchBtn').click(); });
+  el('#searchBtn').onclick=async ()=>{
+    const q = el('#q').value.trim(); if(!q) return; const src = el('#source').value;
+    show('Searching…');
+    try{
+      const items = await SOURCES[src].search(q);
+      renderResults(items, src);
+      toast(`Found ${items.length} from ${SOURCES[src].label}`);
+    }catch(err){ console.error(err); toast('Search failed: '+err.message); }
+    hide();
+  };
+
+  function renderResults(items, src){
+    const box = el('#results'); box.innerHTML='';
+    if(!items.length){ box.innerHTML = '<p class="small muted">No results.</p>'; return; }
+    items.forEach(it=>{
+      const c = document.createElement('div'); c.className='card';
+      c.innerHTML = `
+        <h4>${escapeHtml(it.title||'(untitled)')}</h4>
+        <div class="meta">${escapeHtml((it.authors||[]).join(', '))}${it.year? ' · '+it.year:''} ${it.source? ' · '+it.source:''}</div>
+        ${it.abstract? `<p class="small">${escapeHtml(it.abstract)}</p>`:''}
+        <div class="actions">
+          ${it.url? `<a class="link" target="_blank" href="${it.url}"><button>Open</button></a>`:''}
+          ${it.pdf? `<a class="link" target="_blank" href="${it.pdf}"><button>PDF</button></a>`:''}
+          <button data-act="add">Add to Library</button>
+          <button data-act="snip">Save snippet</button>
+          <button data-act="cite">Copy citation</button>
+        </div>
+      `;
+      // attach metadata
+      c.dataset.meta = JSON.stringify(it);
+      box.appendChild(c);
+    });
+    box.onclick = async (e)=>{
+      const b=e.target.closest('button'); if(!b) return; const card=e.target.closest('.card'); const it=JSON.parse(card.dataset.meta);
+      if(b.dataset.act==='add'){ const key = addRefFromItem(it); toast(`Added [${key}]`); }
+      if(b.dataset.act==='snip'){ const t = prompt('Paste snippet from this source'); if(t){ state.snips.push({key:it.key||it.id||slug(it.title), text:t}); save(); renderSnips(); } }
+      if(b.dataset.act==='cite'){ const key = addRefFromItem(it, /*silent*/true); const text = await citeKeyToText(key); copy(text); toast('Citation copied'); }
+    }
+  }
+
+  function addRefFromItem(it, silent){
+    const key = (it.key || it.id || slug(`${(it.authors?.[0]||'anon')} ${it.year||''} ${it.title||''}`)).slice(0,24);
+    const ref = {
+      id:key,
+      type: it.type || 'article-journal',
+      title: it.title,
+      author: (it.authors||[]).map(n=>nameToAuthor(n)),
+      issued: it.year? {'date-parts': [[Number(it.year)||it.year]]} : undefined,
+      URL: it.url || it.pdf || undefined,
+      abstract: it.abstract
+    };
+    state.refs[key]=ref;
+    if(it.pdf){ state.pdfs.push({title:it.title, url:it.pdf}); }
+    save(); if(!silent) renderRefs(); renderPDFs(); return key;
+  }
+
+  async function citeKeyToText(key){
+    const ref = state.refs[key]; if(!ref) return '';
+    const cite = new window.Cite(ref);
+    return cite.format('citation', {format:'text', template:'apa'});
+  }
+
+  // HELPERS
+  function slug(s){ return (s||'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,''); }
+  function nameToAuthor(n){
+    n = n||''; const parts = n.split(' ');
+    const family = parts.pop(); const given = parts.join(' ');
+    return {given, family};
+  }
+  function download(filename, text){
+    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([text],{type:'text/plain'})); a.download=filename; a.click();
+  }
+  function copy(text){ navigator.clipboard?.writeText(text); }
+  function toast(msg){ const s=el('#status'); s.textContent=msg; s.classList.add('show'); setTimeout(()=>s.classList.remove('show'), 1400); }
+  function show(msg){ const s=el('#status'); s.textContent=msg; s.classList.add('show'); }
+  function hide(){ el('#status').classList.remove('show'); }
+  function insertAtCursor(textarea, text){ const [start,end]=[textarea.selectionStart, textarea.selectionEnd]; const v=textarea.value; textarea.value=v.slice(0,start)+text+v.slice(end); textarea.selectionStart=textarea.selectionEnd=start+text.length; textarea.focus(); }
+  function escapeHtml(s){ return (s||'').replace(/[&<>\"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  // KEYBOARD
+  document.addEventListener('keydown', e=>{
+    if((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k'){ e.preventDefault(); el('#insertCite').click(); }
+    if(e.key.toLowerCase()==='f' && !e.metaKey && !e.ctrlKey){ if(document.activeElement.tagName!=='INPUT' && document.activeElement.tagName!=='TEXTAREA'){ e.preventDefault(); el('#focusBtn').click(); } }
+  });
+
+  // SOURCES
+  const SOURCES = {
+    openalex: {
+      label:'OpenAlex',
+      async search(q){
+        const url = `https://api.openalex.org/works?search=${encodeURIComponent(q)}&per-page=20&mailto=anonymous@example.com`;
+        const res = await fetch(url); if(!res.ok) throw new Error('OpenAlex error');
+        const j = await res.json();
+        return (j.results||[]).map(w=>({
+          id: w.id, title:w.title, year:w.from_publication_date?.slice(0,4) || w.publication_year,
+          authors: (w.authorships||[]).map(a=>a.author?.display_name).filter(Boolean),
+          abstract: w.abstract_inverted_index? invertAbstract(w.abstract_inverted_index): w.abstract,
+          url: w.primary_location?.source?.host_organization_name? w.primary_location?.landing_page_url: w.landing_page_url,
+          pdf: w.open_access?.oa_url || w.primary_location?.pdf_url,
+          source:'OpenAlex', type:'article-journal'
+        }));
+      }
+    },
+    arxiv:{
+      label:'arXiv',
+      async search(q){
+        const url = `https://export.arxiv.org/api/query?search_query=all:${encodeURIComponent(q)}&start=0&max_results=20`;
+        const res = await fetch(url); if(!res.ok) throw new Error('arXiv error');
+        const xml = await res.text();
+        const parser = new DOMParser(); const doc = parser.parseFromString(xml,'text/xml');
+        return Array.from(doc.querySelectorAll('entry')).map(e=>{
+          const title = e.querySelector('title')?.textContent?.trim();
+          const summary = e.querySelector('summary')?.textContent?.trim();
+          const authors = Array.from(e.querySelectorAll('author name')).map(n=>n.textContent);
+          const id = e.querySelector('id')?.textContent;
+          const pdf = Array.from(e.querySelectorAll('link')).find(l=>l.getAttribute('title')==='pdf' || l.getAttribute('type')==='application/pdf')?.getAttribute('href');
+          const year = (e.querySelector('published')?.textContent||'').slice(0,4);
+          return { id, title, year, authors, abstract: summary, url:id, pdf, source:'arXiv', type:'article-journal' };
+        });
+      }
+    },
+    wikipedia:{
+      label:'Wikipedia',
+      async search(q){
+        const searchUrl = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&origin=*`;
+        const r = await fetch(searchUrl); if(!r.ok) throw new Error('Wikipedia error');
+        const j = await r.json();
+        return (j.query?.search||[]).map(s=>({
+          id: s.pageid, title: s.title, year: '', authors:['Wikipedia editors'],
+          abstract: s.snippet?.replace(/<[^>]+>/g,''), url:`https://en.wikipedia.org/wiki/${encodeURIComponent(s.title)}`,
+          pdf: '', source:'Wikipedia', type:'webpage'
+        }));
+      }
+    },
+    gbooks:{
+      label:'Google Books',
+      async search(q){
+        const url = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=20`;
+        const r = await fetch(url); if(!r.ok) throw new Error('Google Books error');
+        const j = await r.json();
+        return (j.items||[]).map(b=>{
+          const v=b.volumeInfo||{}; const a=v.authors||[]; const year=(v.publishedDate||'').slice(0,4);
+          return { id:b.id, title:v.title, authors:a, year, abstract:v.description, url:v.infoLink, pdf:'', source:'Google Books', type:'book' };
+        });
+      }
+    },
+    s2:{
+      label:'Semantic Scholar',
+      async search(q){
+        const url = `https://api.semanticscholar.org/graph/v1/paper/search?query=${encodeURIComponent(q)}&limit=20&fields=title,authors,year,abstract,openAccessPdf,url,externalIds`;
+        const r = await fetch(url); if(!r.ok) throw new Error('Semantic Scholar error');
+        const j = await r.json();
+        return (j.data||[]).map(p=>({
+          id:p.paperId, title:p.title, year:p.year, authors:(p.authors||[]).map(a=>a.name), abstract:p.abstract,
+          url:p.url, pdf:p.openAccessPdf?.url, source:'Semantic Scholar', type:'article-journal'
+        }));
+      }
+    }
+  };
+
+  function invertAbstract(idx){
+    // OpenAlex provides an inverted index; reconstruct abstract
+    const words = Object.keys(idx);
+    const positions = [];
+    for(const w of words){ for(const pos of idx[w]) positions[pos]=w; }
+    return positions.join(' ');
+  }
+
+})();
+</script>
+</body>
+</html>
